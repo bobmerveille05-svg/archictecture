@@ -1,0 +1,36 @@
+# docker-compose.yml
+# Configuration Docker pour l'agent local
+
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/app
+      - agent_data:/tmp/agent
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - DB_PATH=/app/agent.db
+      - MEMORY_DB_PATH=/app/agent_memory.db
+      - SANDBOX_DIR=/tmp/agent
+    stdin_open: true
+    tty: true
+    command: python -m agent.main run
+
+  # Optionnel: DB externe si besoin
+  # db:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_USER: agent
+  #     POSTGRES_PASSWORD: agent
+  #     POSTGRES_DB: agent
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  agent_data:
+  # postgres_data:
