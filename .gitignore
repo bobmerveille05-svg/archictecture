@@ -11,6 +11,8 @@ venv/
 # Testing
 .pytest_cache/
 .coverage
+.tmp-tests/
+pytest-cache-files-*/
 
 # IDE
 .idea/
@@ -26,6 +28,8 @@ logs/*.log
 # Environment
 .env
 .env.local
+.mypy_cache/
+.ruff_cache/
 
 # OS
 .DS_Store

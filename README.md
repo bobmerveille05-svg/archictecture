@@ -1,236 +1,86 @@
-# Agent Local V2 — Specification Corrigee
+# Agent Runtime (Professional Baseline)
 
-## Architecture V2 (6 noeuds reels)
+Autonomous local agent runtime built around a runtime-first LangGraph loop:
 
-```
-inject_memory → plan → choose_action → execute_tool → record_result → decide
-                                                                     ↑         │
-                                                                     └─────────┘
-```
+`inject_memory -> plan -> choose_action -> execute_tool -> record_result -> decide`
 
-**PRINCIPE: Runtime-centric, pas LLM-centric**
+## Goals
 
-- Le runtime est source de verite, pas le LLM
-- ToolResult structure (verite)
-- Allowlist security (capacites explicites)
+- Keep runtime execution as source of truth (not LLM claims).
+- Enforce explicit tool permissions (allowlist + network gate).
+- Keep operations auditable with structured logs.
+- Enable production-quality workflows (CI + lint + reproducible local checks).
 
-## Structure V2 Complete
+## Project Layout
 
-```
-agent/
-├── core/
-│   ├── graph.py           # Boucle 6 noeuds
-│   ├── state.py           # AgentState V2
-│   ├── nodes.py           # 5 noeuds operativos
-│   ├── schemas.py         # ToolCallProposal, ToolResult, PlanStep
-│   └── prompts.py
-│
-├── tools/
-│   ├── registry.py        # ToolRegistry centralise
-│   ├── terminal.py
-│   ├── files.py           # Relatif + absolu
-│   ├── web.py
-│   ├── memory_tool.py
-│   └── tasks.py
-│
-├── memory/
-│   ├── session.py         # Contexte actuel (checkpoint)
-│   ├── profile.py         # Durable utilisateur
-│   ├── journal.py         # Lecons compressees
-│   └── db.py
-│
-├── sandbox/
-│   ├── executor.py        # Allowlist + timeout + max output
-│   └── permissions.py    # ALLOWLIST commandes et chemins
-│
-├── observability/
-│   ├── logger.py
-│   └── tracer.py
-│
-├── channels/
-│   └── cli.py
-│
-├── config/
-│   ├── settings.py
-│   └── .env.example
-│
-└── tests/
-    └── test_graph.py      # Tests cibles (pas "validés" encore)
-```
+- `core/`: graph, state, nodes, prompts, schemas
+- `tools/`: terminal, files, web, memory, task management
+- `sandbox/`: command execution and permission controls
+- `memory/`: profile, journal, checkpoint DB access
+- `channels/`: CLI/API/Telegram entry points
+- `observability/`: logging and tracing hooks
+- `tests/`: behavior-focused test suite
 
-## Schemas V2
+## Quick Start
 
-```python
-class ToolCallProposal(TypedDict):
-    tool_name: str
-    arguments: dict
-    reason: str
-
-class ToolResult(TypedDict):
-    tool_name: str
-    success: bool
-    input: dict
-    output: str
-    error: Optional[str]
-    metadata: dict
-    recoverable: bool
-
-class AgentState(TypedDict):
-    objective: str
-    plan: list[str]
-    current_step: int
-    memory_context: str
-    messages: list
-    
-    last_proposal: ToolCallProposal  # Ce que LLM propose
-    last_result: ToolResult           # Ce que runtime execute VRAIMENT
-    tool_results: list[ToolResult]    # Historique
-    
-    status: Literal["running", "finished", "error"]
-    decision: Literal["execute", "next_step", "replan", "finish", "error"]
-    decision_reason: str
-    
-    iteration: int
-    max_iterations: int
-    retry_count: int
-    
-    session_summary: str
-    errors: list[str]
-```
-
-## Decidesur Hybride (Runtime-first)
-
-```
-SI last_result.success == True → next_step
-SI recoverable ET retry < limite → replan
-SI erreur bloquante → error
-SI fin plan → finish
-
-LLM intervene SEULEMENT pour: replanifier, reformuler, arbitrer flou
-```
-
-## Securite V2 (Allowlist)
-
-```python
-ALLOWED_COMMANDS = {"ls", "echo", "cat", "python", "git", ...}
-ALLOWED_READ_ROOTS = ["/tmp", "/workspace"]
-ALLOWED_WRITE_ROOTS = ["/tmp/agent", "/workspace"]
-
-MAX_OUTPUT_CHARS = 4000
-MAX_PROCESS_SECONDS = 20
-ALLOW_NETWORK = False
-```
-
-## Cibles de Tests
-
-Au lieu de "6 criteres valides", vise ces tests precise:
-
-1. plan cree une seule fois
-2. choose_action propose un outil autorise
-3. execute_tool refuse un outil non autorise
-4. record_result stocke un ToolResult propre
-5. decide passe a etape suivante apres succes
-6. decide stoppe apres max_iterations
-7. checkpoint permet reprise via thread_id
-8. journal final ecrit un resume de session
-
-## Utilisation
+### 1. Install
 
 ```bash
-cd /workspace/project/agent
-cp config/.env.example .env
-# Ajouter OPENAI_API_KEY
-
-python -m agent.main run "Creer test.txt avec Hello"
-python -m agent.main run "Lire test.txt"
+python -m pip install -e .[dev]
 ```
 
-## Installation
+### 2. Configure
+
+Create `.env` at project root:
+
+```env
+OPENAI_API_KEY=your_key
+MODEL_NAME=gpt-4o
+MAX_ITERATIONS=20
+TOOL_TIMEOUT=30
+ALLOW_NETWORK=false
+```
+
+### 3. Run
 
 ```bash
-cd agent
-pip install -e .
+python main.py run "Create test.txt with Hello"
+python main.py history
 ```
 
-## Configuration
-
-Copier `.env.example` vers `.env` et configurer les variables:
+## Engineering Commands
 
 ```bash
-cp config/.env.example .env
-# Éditer .env avec vos clés API
+make install-dev
+make lint
+make test
+make check
 ```
 
-Variables obligatoires:
-- `OPENAI_API_KEY` - Clé API OpenAI
+## Quality Baseline
 
-Variables optionnelles:
-- `MODEL_NAME` - Modèle à utiliser (défaut: gpt-4o)
-- `MAX_ITERATIONS` - Nombre max d'itérations (défaut: 20)
-- `TOOL_TIMEOUT` - Timeout des commandes (défaut: 30s)
+- CI on push/PR (`.github/workflows/ci.yml`)
+- Static analysis via `ruff`
+- Test suite via `pytest`
+- Type checks ready via `mypy` config
 
-## Utilisation
+## Security Posture
 
-### Mode CLI
+- Command execution controlled by allowlist in `sandbox/permissions.py`
+- Optional network hard gate through `ALLOW_NETWORK`
+- Read/write path restrictions for sandboxed file operations
 
-```bash
-# Lancer une tâche
-python -m agent.main run "Créer un fichier test.txt avec Hello World"
+## Current Maturity (Now)
 
-# Avec verbeux
-python -m agent.main run "..." --verbose
+- Runtime safety controls in place
+- Deterministic `tool_results` accumulation fixed
+- Dynamic DB path resolution for test/runtime parity
+- CLI aligned with actual runtime node names
 
-# Reprendre une session
-python -m agent.main resume <session_id>
+## Next Professional Milestones
 
-# Voir l'historique
-python -m agent.main history
-```
-
-### Mode API (Phase 3)
-
-```bash
-uvicorn agent.channels.api:app --reload
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                      AGENT                             │
-│  ┌──────────┐    ┌───────────────────────────────────┐  │
-│  │   CLI    │───▶│         LangGraph                 │  │
-│  │ Rich     │    │  inject → plan → act → observe    │  │
-│  └──────────┘    │                ↑      │           │  │
-│                  │           continue ───┘           │  │
-│                  │              decide → END         │  │
-│                  └───────────────────────────────────┘  │
-│                             │                           │
-│                  ┌──────────┴──────────┐               │
-│                  │    OUTILS           │  MÉMOIRE     │
-│                  │ terminal            │  session     │
-│                  │ files               │  profile     │
-│                  │ web                 │  journal     │
-│                  │ memory              │              │
-│                  └─────────────────────┘              │
-│                  sandbox + logger                     │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Tests
-
-```bash
-pytest agent/tests/ -v
-```
-
-Les 6 critères validés:
-1. ✅ Reçoit un objectif
-2. ✅ Planifie les étapes
-3. ✅ Appelle les outils
-4. ✅ Checkpoint pour reprise
-5. ✅ Observations enregistrées
-6. ✅ Pas d'exception non capturée
-
-## Licence
-
-MIT
+1. Implement real API execution streaming (remove placeholders).
+2. Add end-to-end integration tests with deterministic stubs.
+3. Introduce package-level type coverage target and strict mypy profile.
+4. Add release/versioning workflow and changelog automation.
+5. Add production deployment profile (container hardening + health endpoints).
