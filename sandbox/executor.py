@@ -10,7 +10,7 @@ from sandbox.permissions import check_permission, ALLOWED_COMMANDS
 SANDBOX_DIR = os.getenv("SANDBOX_DIR", "/tmp/agent")
 TOOL_TIMEOUT = int(os.getenv("TOOL_TIMEOUT", "30"))
 MAX_OUTPUT_CHARS = int(os.getenv("MAX_OUTPUT_CHARS", "4000"))
-ALLOW_NETWORK = os.getenv("ALLOW_NETWORK", "false").lower() == "true"
+NETWORK_COMMAND_HINTS = ("curl", "wget")
 
 
 def ensure_sandbox_dir():
@@ -39,6 +39,16 @@ def execute_command_safe(command: str, use_shell: bool = False) -> dict:
             "output": "",
             "error": f"BLOQUE : permission refusee pour -> {command}",
         }
+
+    allow_network = os.getenv("ALLOW_NETWORK", "false").lower() == "true"
+    if not allow_network:
+        lowered = command.lower()
+        if any(hint in lowered for hint in NETWORK_COMMAND_HINTS):
+            return {
+                "success": False,
+                "output": "",
+                "error": "BLOQUE : commandes reseau interdites (ALLOW_NETWORK=false)",
+            }
     
     try:
         if use_shell:

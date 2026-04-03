@@ -3,14 +3,16 @@
 
 import sqlite3
 from pathlib import Path
-from datetime import datetime
 import os
 
-DB_PATH = Path(os.getenv("MEMORY_DB_PATH", "agent_memory.db"))
+
+def get_db_path() -> Path:
+    """Resolve DB path at call time so env overrides work in tests/runtime."""
+    return Path(os.getenv("MEMORY_DB_PATH", "agent_memory.db"))
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 

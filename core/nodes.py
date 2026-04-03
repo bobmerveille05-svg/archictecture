@@ -214,16 +214,15 @@ def record_result_node(state: AgentState) -> dict:
     if not last_result:
         return {}
     
-    tool_results = state.get("tool_results", [])
-    tool_results.append(last_result)
-    
     log_action("record_result", {
         "tool": last_result.get("tool_name"),
         "success": last_result.get("success"),
         "output_len": len(last_result.get("output", "")),
     })
-    
-    return {"tool_results": tool_results}
+
+    # AgentState.tool_results uses operator.add aggregator in LangGraph.
+    # Return only the delta to avoid duplicating historical entries.
+    return {"tool_results": [last_result]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
